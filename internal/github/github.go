@@ -20,7 +20,32 @@ type GitHubIssues struct {
 	logger      *log.Logger
 }
 
+// NotifyAIStatus posts a message to notify AI response status
+func (gh *GitHubIssues) NotifyAIStatus(start bool) error {
+	var message string
+	if start {
+		message = "AIが現在応答中です。しばらくお待ちください。"
+	} else {
+		message = "AIの応答が完了しました。"
+	}
+
+	// Post the comment to the issue
+	return gh.PostComment(message)
+}
+
 func (gh *GitHubIssues) GetIssue() (*github.Issue, error) {
+	// Notify that AI is starting its response
+	if err := gh.NotifyAIStatus(true); err != nil {
+		gh.logger.Printf("Error notifying AI start status: %v", err)
+	}
+
+	defer func() {
+		// Notify that AI has completed its response
+		if err := gh.NotifyAIStatus(false); err != nil {
+			gh.logger.Printf("Error notifying AI completion status: %v", err)
+		}
+	}()
+
 	// Only the first call retrieves information from GitHub, all other calls use cache
 	if gh.cache == nil {
 		issue, _, err := gh.client.Issues.Get(gh.ctx, gh.owner, gh.repo, gh.issueNumber)
@@ -49,6 +74,18 @@ func (gh *GitHubIssues) GetTitle() (*string, error) {
 }
 
 func (gh *GitHubIssues) GetComments() ([]*github.IssueComment, error) {
+	// Notify that AI is starting its response
+	if err := gh.NotifyAIStatus(true); err != nil {
+		gh.logger.Printf("Error notifying AI start status: %v", err)
+	}
+
+	defer func() {
+		// Notify that AI has completed its response
+		if err := gh.NotifyAIStatus(false); err != nil {
+			gh.logger.Printf("Error notifying AI completion status: %v", err)
+		}
+	}()
+
 	// Options
 	opt := &github.IssueListCommentsOptions{Direction: "asc", Sort: "created"}
 	opt.Page = 1
