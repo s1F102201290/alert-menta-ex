@@ -43,12 +43,10 @@ func main() {
         }
         logger.Fatalf("Invalid command: %s. Allowed commands are %s.", *command, strings.Join(allowedCommands, ", "))
     }
-    // Create a GitHub Issues instance. From now on, you can control GitHub from this instance.
     issue := github.NewIssue(*owner, *repo, *issueNumber, *gh_token)
     if issue == nil {
         logger.Fatalf("Failed to create GitHub issue instance")
     }
-    // Get Issue's information(e.g. Title, Body) and add them to the user prompt except for comments by Actions.
     title, err := issue.GetTitle()
     if err != nil {
         logger.Fatalf("Error getting Title: %v", err)
@@ -62,7 +60,6 @@ func main() {
         logger.Println("Body:", *body)
     }
     user_prompt := "Title: " + *title + "\nBody: " + *body + "\n"
-    // Get comments under the Issue and add them to the user prompt except for comments by Actions.
     comments, err := issue.GetComments()
     if err != nil {
         logger.Fatalf("Error getting comments: %v", err)
@@ -76,8 +73,8 @@ func main() {
         }
         user_prompt += *v.User.Login + ": " + *v.Body + "\n"
     }
-    // Set system prompt
-    var system_prompt string
+14:19
+var system_prompt string
     if *command == "ask" {
         if *intent == "" {
             logger.Fatalf("Error: intent is required for 'ask' command")
@@ -88,12 +85,10 @@ func main() {
     }
     prompt := ai.Prompt{UserPrompt: user_prompt, SystemPrompt: system_prompt}
     logger.Println("\x1b[34mPrompt: |\n", prompt.SystemPrompt, prompt.UserPrompt, "\x1b[0m")
-    // Get response from OpenAI or VertexAI
     var aic ai.Ai
     if cfg.Ai.Provider == "openai" {
         if *oai_key == "" {
-14:15
-logger.Fatalf("Error: Please provide your Open AI API key.")
+            logger.Fatalf("Error: Please provide your Open AI API key.")
         }
         aic = ai.NewOpenAIClient(*oai_key, cfg.Ai.OpenAI.Model)
         logger.Println("Using OpenAI API")
@@ -105,15 +100,15 @@ logger.Fatalf("Error: Please provide your Open AI API key.")
     } else {
         logger.Fatalf("Error: Invalid provider")
     }
-    // Notify that AI is starting to respond
-    if err := issue.NotifyAIStatus(true); err != nil {
-        logger.Printf("Error notifying AI start status: %v", err)
+    // **AI応答中の通知をGitHubに投稿**
+    if err := issue.PostComment("AI応答中... しばらくお待ちください。"); err != nil {
+        logger.Printf("Error creating notification comment for AI start: %s", err)
     }
     // Get response from AI
     comment, err := aic.GetResponse(prompt)
     if err != nil {
         logger.Printf("Error getting AI response: %v", err)
-        // Optionally notify AI completion here
+        // 応答に失敗した場合は、AI処理が完了したことを通知
     } else {
         logger.Println("Response:", comment)
         // Post a comment on the Issue
@@ -122,8 +117,8 @@ logger.Fatalf("Error: Please provide your Open AI API key.")
             logger.Fatalf("Error creating comment: %s", err)
         }
     }
-    // Notify that AI processing is complete
-    if err := issue.NotifyAIStatus(false); err != nil {
-        logger.Printf("Error notifying AI completion status: %v", err)
+    // **AI処理が完了したことを通知**
+    if err := issue.PostComment("AIの応答が完了しました。"); err != nil {
+        logger.Printf("Error creating notification comment for AI completion: %s", err)
     }
 }
